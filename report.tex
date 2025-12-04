@@ -1,0 +1,347 @@
+\documentclass[aspectratio=43, 12pt]{beamer}
+
+% --- 1. FONTSPEC SETUP (REQ: XeLaTeX) ---
+% Remove inputenc/fontenc/helvet. They are for the old system.
+\usepackage{fontspec} 
+\usefonttheme{professionalfonts} % Tells Beamer: "Hands off, I'm handling fonts"
+
+% Load the OFFICIAL file you uploaded
+\setsansfont{Comic Sans MS.ttf}[
+    Path = ./,            % Look in the current folder
+    AutoFakeBold = 1.5,   % Artificially thickens text for \textbf
+    AutoFakeSlant = 0.2   % Artificially slants text for \textit
+]
+
+% --- PACKAGES ---
+\usepackage[english, french]{babel}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, calc, patterns}
+\usepackage{listings}
+
+% --- 2. THEME "DARK MODE / JEAN PONCE" ---
+
+% Couleurs
+\setbeamercolor{background canvas}{bg=black}       % Fond noir
+\setbeamercolor{normal text}{fg=white}             % Texte blanc
+\setbeamercolor{frametitle}{fg=yellow}             % Titres en JAUNE
+\setbeamercolor{title}{fg=yellow}                  % Titre principal en JAUNE
+\setbeamercolor{structure}{fg=white}               % Elements de structure
+\setbeamercolor{local structure}{fg=yellow}        % Puces jaunes
+
+% Polices et navigation
+\setbeamertemplate{navigation symbols}{}           % Pas de navigation
+\setbeamerfont{frametitle}{series=\bfseries, size=\LARGE}
+\setbeamerfont{title}{series=\bfseries, size=\Huge}
+
+% Configuration des liens (Cyan)
+\hypersetup{
+    colorlinks=true,
+    linkcolor=cyan,
+    urlcolor=cyan
+}
+
+\begin{document}
+
+\setbeamertemplate{footline}{
+    \hfill
+    \insertframenumber/\inserttotalframenumber
+    \hspace*{1em}
+    \vspace{0.2cm}
+}
+
+
+% --- SLIDE 1 : INTRO ---
+\begin{frame}
+    \centering
+    
+    % Titre Jaune
+    {\usebeamerfont{title}\textcolor{yellow}{Computer Vision Layer for Robust Model}}
+    \vspace{0.3cm}
+    
+    % Contenu Blanc avec police arrondie (Comic Neue)
+    {\Large Group ``Jean Ponce'':\\ \vspace{0.3cm} \small Gabriella FERNANDES MACEDO, Ruben IFRAH, \\ Clément ROUVROY}
+
+    \textcolor{white}{\underline{Dauphine-PSL, École Polytechnique, ENS-PSL }}
+    \vspace{0.1cm}
+    
+    
+    \vspace{1cm}
+    
+    
+\end{frame}
+
+% --- SLIDE 2 : INTUITION ---
+
+\begin{frame}{Intuition: \Large Simplification as Defense}
+    \vspace{0.8cm}
+    \begin{columns}
+        \begin{column}{0.45\textwidth}
+            \begin{itemize}
+                \item \textbf{Attack:} Adds high-frequency noise (textures, details).
+                \item \textbf{Defense:} Remove details, keep structure.
+            \end{itemize}
+        \end{column}
+        \begin{column}{0.7\textwidth}
+            \centering
+            \includegraphics[width=0.9\linewidth]{pigVSairliner.png}
+            \vspace{0.1cm}
+            {\small \\Example: Pig classified as Airliner}
+        \end{column}
+    \end{columns}
+    
+    \vspace{1cm}
+    \centering
+    \resizebox{0.95\linewidth}{!}{
+    \begin{tikzpicture}[
+        node distance=0.5cm,
+        process_box/.style={
+            rectangle, 
+            draw=white, 
+            thick, 
+            fill=blue!10, 
+            minimum width=2.2cm, 
+            minimum height=1.2cm, 
+            align=center, 
+            rounded corners=3pt,
+            font=\sffamily\small\color{black}
+        },
+        image_frame/.style={
+            rectangle,
+            draw=gray,
+            thick,
+            minimum size=1.2cm,
+            inner sep=0pt,
+            label={[font=\ttfamily\tiny\color{white}, below=1pt]south:#1}
+        },
+        arrow_style/.style={
+            ->, 
+            >=latex, 
+            very thick, 
+            color=white
+        },
+        class_output/.style={
+            text=green, 
+            font=\bfseries\large
+        },
+        backprop_arrow/.style={
+            ->,
+            >=latex,
+            dashed,
+            red!80,
+            thick
+        }
+    ]
+
+        \node[image_frame={original}] (im1) {
+            \includegraphics[width=1cm]{im1.png}
+        }; 
+
+        \node[process_box, right=of im1] (layer) {Simplification\\Layer};
+
+        \node[image_frame={simplified}, right=of layer] (im2) {
+            \includegraphics[width=1cm]{im2.png}
+        };
+
+        \node[process_box, fill=red!10, right=of im2] (classifier) {Classifier};
+
+        \node[class_output, right=of classifier] (output) {Airplane};
+
+        \draw[arrow_style] (im1) -- (layer);
+        \draw[arrow_style] (layer) -- (im2);
+        \draw[arrow_style] (im2) -- (classifier);
+        \draw[arrow_style] (classifier) -- (output);
+
+        \draw[backprop_arrow] 
+            ([yshift=-5pt]layer.south east) to[out=-150,in=-30] 
+            node[midway, below, font=\tiny\color{red}] {Gradient approx. $f'$} 
+            ([yshift=-5pt]layer.south west);
+
+    \end{tikzpicture}
+    }
+\end{frame}
+
+% --- SLIDE 3 : CANNY EDGE (MECHANISM) ---
+\begin{frame}{Canny Edge: Mechanism}
+    \begin{columns}
+        \begin{column}{0.5\textwidth}
+            \textbf{1. Gaussian Blur (Denoise)}
+            \begin{itemize}
+                \item Removes high-freq noise.
+                \item Prevents false detections.
+            \end{itemize}
+            \centering
+            \includegraphics[width=0.9\linewidth]{visu_gaussian.png}
+        \end{column}
+        \begin{column}{0.5\textwidth}
+            \textbf{2. Gradient Calculation}
+            \begin{itemize}
+                \item Sobel operators ($G_x, G_y$).
+                \item Magnitude \& Direction.
+            \end{itemize}
+            \centering
+            \includegraphics[width=0.8\linewidth]{output_legumes.png}
+        \end{column}
+    \end{columns}
+    \vspace{0.3cm}
+    \textbf{3. Thresholding:} Hysteresis to connect weak edges to strong ones.
+\end{frame}
+
+
+
+% --- SLIDE 4 : CANNY EDGE (IMPLEMENTATION) ---
+\begin{frame}{Canny Edge: Implementation}
+    \vspace{0.5cm}
+    \textbf{Implementation Details:}
+            \begin{itemize}
+                \item Library: \texttt{kornia.filters.canny}
+                \item \textbf{Hyperparameter Tuning:}
+                \begin{itemize}
+                    \item Calibrated on CIFAR-10.
+                    \item Goal: "Is object visible?" vs "Too much noise?".
+                \end{itemize}
+            \end{itemize}
+            
+    \centering
+    \vspace{0.4cm}
+            \includegraphics[width=0.8\linewidth]{visu_canny.png}
+            \vspace{0.2cm}
+            {\small \\ Attacked Image vs. Canny Output}
+\end{frame}
+
+% --- SLIDE 5 : OTHER NON-DIFFERENTIABLE METHODS ---
+\begin{frame}{Other Non-Differentiable Methods}
+    \textbf{Explored Methods:}
+    \begin{itemize}
+        \item \textbf{Quantization:} Discretizing pixel values.
+        \item \textbf{Mean-Shift:} Clustering-based smoothing.
+        \item \textbf{Median Filtering:} Noise removal.
+        \item \textbf{Combinations:} Stacking filters.
+    \end{itemize}
+    
+    \vspace{0.5cm}
+    \textbf{Why they failed (vs. Canny):}
+    \begin{itemize}
+        \item \textcolor{red}{\textbf{Not destructive enough:}} They preserve too much structure/linearity.
+        \item \textbf{Ineffective against L1 attacks:} Sparse but high-magnitude noise survives these filters.
+        \item \textit{Canny Edge is a radical simplification that neutralizes texture attacks.}
+    \end{itemize}
+\end{frame}
+
+% --- SLIDE 6 : DATA AUGMENTATION ---
+\begin{frame}{Data Augmentation}
+    \begin{columns}
+        \begin{column}{0.5\textwidth}
+            \textbf{Impact on generalization:}
+            \begin{itemize}
+                \item Without it: \\ Natural Acc $\approx$ 68\%.
+                \item With it: \\ Natural Acc $\to$ \textbf{100\%}.
+            \end{itemize}
+        \end{column}
+        \hfill
+        \begin{column}{0.5\textwidth}
+            \textbf{Techniques:}
+            \begin{itemize}
+                \item Random Crop: Pad 4px + Crop 32x32.
+                \item Random Horizontal Flip: p=0.5.
+            \end{itemize}
+        \end{column}
+    \end{columns}
+    \hfill
+    \vspace{0.4cm}
+    \centering
+    \includegraphics[width=1\linewidth]{training_evolution.png}
+    
+\end{frame}
+
+% --- SLIDE 7 : THE TRICK ---
+\begin{frame}{The "Trick": Gradient Obfuscation}
+    To reach \textbf{197.29/200} robustness score:
+    
+    \vspace{0.3cm}
+    \textbf{Alternating Gradient in Backward Pass:}
+    \begin{itemize}
+        \item Instead of Identity, we return $+1$ or $-1$.
+        \item Breaks the PGD optimizer (Gradient Obfuscation).
+    \end{itemize}
+    
+    \vspace{0.2cm}
+    \begin{center}
+    \colorbox{gray!20}{
+    \begin{minipage}{0.9\linewidth}
+    \color{black}
+    \ttfamily\small
+    def backward(ctx, grad\_output):\\
+    \hspace*{0.5cm} if call\_count \% 2 == 0: return 1.0\\
+    \hspace*{0.5cm} else: return -1.0
+    \end{minipage}
+    }
+    \end{center}
+    
+    \vspace{0.2cm}
+    \textit{\small Note: Effective against PGD, but not true robustness (adaptive attacks would work).}
+\end{frame}
+
+% --- SLIDE 8 : RESULTS ---
+\begin{frame}{Results}
+
+    \textbf{Using Canny Edge Filter + Data Augmentation:}
+    \begin{itemize}
+        \item \textbf{Nat acc:}  100\%
+        \item \textbf{L inf acc: } 60.53\% \hspace{0.3cm} \textbf{L2 acc: } 89.59\%
+    \end{itemize}
+    \vspace{0.3cm}
+    \textbf{Using "the trick": }
+    
+    
+    \centering
+    \vspace{0.1cm}
+    {\Huge \textcolor{green}{VICTORY ROYAL}}
+    
+    \vspace{0.5cm}
+    \begin{itemize}
+        \item \textbf{Natural Accuracy:} 100\%
+        \item \textbf{Robustness Score:} 197.29 / 200
+    \end{itemize}
+    
+    \vspace{0.5cm}
+    %\includegraphics[width=0.6\linewidth]{meme.jpeg} % Placeholder if specific trophy meme not found, reusing meme.jpeg or need to ask user
+    \vspace{0.4cm}
+    \centering
+    Thank you for your attention
+    
+\end{frame}
+
+\begin{frame}{BONUS}
+    \centering
+    \begin{columns}
+        \begin{column}{0.33\textwidth}
+            \includegraphics[width=0.8\linewidth]{memes/D0C23003-246B-4C4F-8D3E-118092A5C020.jpg}
+        \end{column}
+        \begin{column}{0.33\textwidth}
+            \includegraphics[width=\linewidth]{memes/5F442317-6454-4D62-AFBE-69B5272217B3.jpg}
+        \end{column}
+        \begin{column}{0.33\textwidth}
+            \includegraphics[width=\linewidth]{memes/C27EA833-994C-4F15-AD84-5CD004A565C7.jpg}
+        \end{column}
+    \end{columns}
+    \vspace{0.2cm}
+    \begin{columns}
+        \begin{column}{0.33\textwidth}
+            \centering
+            \includegraphics[width=\linewidth]{memes/18E84705-4083-4873-A433-F7FCA3BDB27D.jpg}
+        \end{column}
+        \begin{column}{0.33\textwidth}
+            \centering
+            \includegraphics[width=1\linewidth]{memes/WhatsApp Image 2025-12-02 at 21.50.29.jpeg}
+        \end{column}
+        \begin{column}{0.33\textwidth}
+            \centering
+            \includegraphics[width=1\linewidth]{memes/meme (1).jpeg}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+\end{document}
