@@ -5,3 +5,4 @@ __pycache__
 *.txt
 *.json
 *.png
+!requirements.txt
